@@ -21,7 +21,7 @@ setup(name='dz-mongodb',
       install_requires=[
           'pipelinewise-singer-python==1.*',
           'pymongo==4.3.*',
-          'tzlocal==2.1.*',
+          'tzlocal>=2.1,<4.4',
           'terminaltables==3.1.*',
           'dnspython==2.1.*',
       ],
