@@ -9,6 +9,7 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
 from singer import metadata
+from dz_mongodb.datetime_utils import isdatetime 
 
 LOGGER = singer.get_logger('dz_mongodb')
 
@@ -143,6 +144,19 @@ def get_databases(client: MongoClient, config: Dict) -> List[str]:
 
     return db_names
 
+def value_type(value) -> str:
+    class_name = value.__name__
+
+    if class_name == 'str':
+        return "string"
+    elif class_name == 'int' or class_name == 'float':
+        return "number"
+    elif class_name == 'bool':
+        return "boolean"
+    elif class_name == 'dict':
+        return "object"
+    elif class_name == 'list':
+        return "array"
 
 def produce_collection_schema(collection: Collection) -> Dict:
     """
@@ -181,7 +195,7 @@ def produce_collection_schema(collection: Collection) -> Dict:
         if valid_replication_keys:
             mdata = metadata.write(mdata, (), 'valid-replication-keys', valid_replication_keys)
 
-    return {
+    db_schema = {
         'table_name': collection_name,
         'stream': collection_name,
         'metadata': metadata.to_list(mdata),
@@ -192,14 +206,6 @@ def produce_collection_schema(collection: Collection) -> Dict:
                 "_id": {
                     "type": ["string", "null"]
                 },
-                "document": {
-                    "type": [
-                        "object",
-                        "array",
-                        "string",
-                        "null"
-                    ]
-                },
                 "_sdc_deleted_at": {
                     "type": [
                         "string",
@@ -209,3 +215,16 @@ def produce_collection_schema(collection: Collection) -> Dict:
             },
         }
     }
+
+    for row in collection.find().limit(1000):
+        for key,value in row.items():
+            val_type = value_type(type(value))
+
+            if val_type == 'str':
+                if isdatetime(value):
+                    db_schema['schema']['properties'][key] = {"type": val_type , "format":"date-time"}
+                    continue
+
+            db_schema['schema']['properties'][key] = {"type": val_type}
+
+    return db_schema
