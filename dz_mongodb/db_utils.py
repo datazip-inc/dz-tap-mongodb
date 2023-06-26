@@ -9,7 +9,7 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
 from singer import metadata
-from dz_mongodb.datetime_utils import isdatetime 
+from dz_mongodb.datetime_utils import is_date_time 
 
 LOGGER = singer.get_logger('dz_mongodb')
 
@@ -221,7 +221,7 @@ def produce_collection_schema(collection: Collection) -> Dict:
             val_type = value_type(type(value))
 
             if val_type == 'str':
-                if isdatetime(value):
+                if is_date_time(value):
                     db_schema['schema']['properties'][key] = {"type": val_type , "format":"date-time"}
                     continue
 

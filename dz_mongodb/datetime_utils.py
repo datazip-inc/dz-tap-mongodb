@@ -1,6 +1,6 @@
 from datetime import datetime
 
-def isdatetime(datetime_str: str) -> bool:
+def is_date_time(datetime_str: str) -> bool:
     """
     Args:
         datetime_str: a string 
