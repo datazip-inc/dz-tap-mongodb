@@ -43,6 +43,7 @@ def update_bookmark(row: Dict, state: Dict, tap_stream_id: str, replication_key_
 def sync_collection(collection: Collection,
                     stream: Dict,
                     state: Optional[Dict],
+                    document_remove:bool = False
                     ) -> None:
     """
     Syncs the stream records incrementally
@@ -107,7 +108,7 @@ def sync_collection(collection: Collection,
                                                              row=row,
                                                              time_extracted=utils.now(),
                                                              time_deleted=None,
-                                                             version=stream_version))
+                                                             version=stream_version,document_remove=document_remove))
             rows_saved += 1
 
             update_bookmark(row, state, stream['tap_stream_id'], replication_key_name)

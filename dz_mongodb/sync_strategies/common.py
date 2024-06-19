@@ -184,6 +184,7 @@ def row_to_singer_record(stream: Dict,
                          time_extracted: datetime.datetime,
                          time_deleted: Optional[datetime.datetime],
                          version: Optional[int] = None,
+                         document_remove: bool = False
                          ) -> singer.RecordMessage:
     """
     Transforms row to singer record message
@@ -207,13 +208,14 @@ def row_to_singer_record(stream: Dict,
     except MongoInvalidDateTimeException as ex:
         raise SyncException(
             f"Error syncing collection {stream['tap_stream_id']}, object ID {row['_id']} - {ex}") from ex
-
-    row_to_persist = {
-        '_id': row_to_persist['_id'],
-        'document': row_to_persist,
-        SDC_DELETED_AT: utils.strftime(time_deleted) if time_deleted else None
-    }
-
+    if document_remove:
+        row_to_persist[SDC_DELETED_AT]  = utils.strftime(time_deleted) if time_deleted else None
+    else:
+        row_to_persist = {
+            '_id': row_to_persist['_id'],
+            'document': row_to_persist,
+            SDC_DELETED_AT: utils.strftime(time_deleted) if time_deleted else None
+        }
     return singer.RecordMessage(
         stream=calculate_destination_stream_name(stream),
         record=row_to_persist,
