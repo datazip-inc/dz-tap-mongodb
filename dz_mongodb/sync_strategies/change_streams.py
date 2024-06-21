@@ -76,7 +76,8 @@ def sync_database(database: Database,
                   state: Dict,
                   update_buffer_size: int,
                   await_time_ms: int,
-                  full_load_on_empty_state: bool
+                  full_load_on_empty_state: bool,
+                  document_remove: bool = False
                   ) -> None:
     """
     Syncs the records from the given collection using ChangeStreams
@@ -118,7 +119,7 @@ def sync_database(database: Database,
                     singer.write_message(common.row_to_singer_record(stream=streams_to_sync[tap_stream_id],
                                                                     row=row,
                                                                     time_extracted=utils.now(),
-                                                                    time_deleted=None))
+                                                                    time_deleted=None, document_remove=document_remove))
 
     # Init a cursor to listen for changes from the last saved resume token
     # if there are no changes after MAX_AWAIT_TIME_MS, then we'll exit
@@ -175,7 +176,7 @@ def sync_database(database: Database,
                 singer.write_message(common.row_to_singer_record(stream=streams_to_sync[tap_stream_id],
                                                                  row=change['fullDocument'],
                                                                  time_extracted=utils.now(),
-                                                                 time_deleted=None))
+                                                                 time_deleted=None, document_remove=document_remove))
 
                 rows_saved[tap_stream_id] += 1
 
@@ -194,27 +195,25 @@ def sync_database(database: Database,
                     row={'_id': change['documentKey']['_id']},
                     time_extracted=utils.now(),
                     time_deleted=change[
-                        'clusterTime'].as_datetime()))  # returns python's datetime.datetime instance in UTC
+                        'clusterTime'].as_datetime(),document_remove=document_remove))  # returns python's datetime.datetime instance in UTC
 
                 rows_saved[tap_stream_id] += 1
-
             # update the states of all streams
             state = update_bookmarks(state, stream_ids, resume_token)
-
             # flush buffer if it has filled up or flush and write state every UPDATE_BOOKMARK_PERIOD messages
             if sum(len(stream_buffer) for stream_buffer in update_buffer.values()) >= update_buffer_size or \
                     sum(rows_saved.values()) % common.UPDATE_BOOKMARK_PERIOD == 0:
 
                 LOGGER.debug('Flushing update buffer ...')
 
-                flush_buffer(update_buffer, streams_to_sync, database, rows_saved)
+                flush_buffer(update_buffer, streams_to_sync, database, rows_saved,document_remove)
 
                 if sum(rows_saved.values()) % common.UPDATE_BOOKMARK_PERIOD == 0:
                     # write state
                     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
     # flush buffer if finished with changeStreams
-    flush_buffer(update_buffer, streams_to_sync, database, rows_saved)
+    flush_buffer(update_buffer, streams_to_sync, database, rows_saved,document_remove)
 
     for stream_id in stream_ids:
         common.COUNTS[stream_id] += rows_saved[stream_id]
@@ -222,7 +221,7 @@ def sync_database(database: Database,
         LOGGER.info('Syncd %s records for %s', rows_saved[stream_id], stream_id)
 
 
-def flush_buffer(buffer: Dict[str, Set], streams: Dict[str, Dict], database: Database, rows_saved: Dict[str, int]):
+def flush_buffer(buffer: Dict[str, Set], streams: Dict[str, Dict], database: Database, rows_saved: Dict[str, int],document_remove: bool = False):
     """
     Flush and reset the given buffer, it increments the row_saved count in the given rows_saved dictionary
     Args:
@@ -244,7 +243,7 @@ def flush_buffer(buffer: Dict[str, Set], streams: Dict[str, Dict], database: Dat
                 record_message = common.row_to_singer_record(stream=stream,
                                                              row=buffered_row,
                                                              time_extracted=utils.now(),
-                                                             time_deleted=None)
+                                                             time_deleted=None,document_remove=document_remove)
                 singer.write_message(record_message)
 
                 rows_saved[stream_id] += 1

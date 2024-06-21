@@ -106,7 +106,7 @@ def clear_state_on_replication_change(stream: Dict, state: Dict) -> Dict:
     return state
 
 
-def sync_traditional_stream(client: MongoClient, stream: Dict, state: Dict):
+def sync_traditional_stream(client: MongoClient, stream: Dict, state: Dict,document_remove:bool = False):
     """
     Sync given stream
     Args:
@@ -145,9 +145,9 @@ def sync_traditional_stream(client: MongoClient, stream: Dict, state: Dict):
         collection = client[database_name][stream["table_name"]]
 
         if replication_method == 'FULL_TABLE':
-            full_table.sync_collection(collection, stream, state)
+            full_table.sync_collection(collection, stream, state,document_remove)
         else:
-            incremental.sync_collection(collection, stream, state)
+            incremental.sync_collection(collection, stream, state,document_remove)
 
     state = singer.set_currently_syncing(state, None)
 
@@ -155,7 +155,7 @@ def sync_traditional_stream(client: MongoClient, stream: Dict, state: Dict):
 
 
 
-def sync_traditional_streams(client: MongoClient, traditional_streams: List[Dict], state: Dict):
+def sync_traditional_streams(client: MongoClient, traditional_streams: List[Dict], state: Dict,document_remove: bool = False):
     """
     Sync traditional streams that use either FULL_TABLE or INCREMENTAL one stream at a time.
     Args:
@@ -164,7 +164,7 @@ def sync_traditional_streams(client: MongoClient, traditional_streams: List[Dict
         state: state dictionary
     """
     for stream in traditional_streams:
-        sync_traditional_stream(client, stream, state)
+        sync_traditional_stream(client, stream, state,document_remove)
 
 
 def sync_log_based_streams(client: MongoClient,
@@ -173,7 +173,8 @@ def sync_log_based_streams(client: MongoClient,
                            state: Dict,
                            update_buffer_size: Optional[int],
                            await_time_ms: Optional[int],
-                           full_load_on_empty_state: bool
+                           full_load_on_empty_state: bool,
+                           document_remove:bool  = False,
                            ):
     """
     Sync log_based streams all at once by listening on the database-level change streams events.
@@ -208,7 +209,7 @@ def sync_log_based_streams(client: MongoClient,
         update_buffer_size = update_buffer_size or change_streams.MIN_UPDATE_BUFFER_LENGTH
         await_time_ms = await_time_ms or change_streams.DEFAULT_AWAIT_TIME_MS
 
-        change_streams.sync_database(client[database_name], streams, state, update_buffer_size, await_time_ms, full_load_on_empty_state)
+        change_streams.sync_database(client[database_name], streams, state, update_buffer_size, await_time_ms, full_load_on_empty_state,document_remove)
 
     state = singer.set_currently_syncing(state, None)
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
@@ -231,7 +232,7 @@ def do_sync(client: MongoClient, catalog: Dict, config: Dict, state: Dict):
     log_based_streams, traditional_streams = filter_streams_by_replication_method(streams_to_sync)
 
     LOGGER.debug('Starting sync of traditional streams ...')
-    sync_traditional_streams(client, traditional_streams, state)
+    sync_traditional_streams(client, traditional_streams, state,config.get('remove_document_prefix'))
     LOGGER.debug('Sync of traditional streams done')
 
     LOGGER.debug('Starting sync of log based streams ...')
@@ -241,7 +242,8 @@ def do_sync(client: MongoClient, catalog: Dict, config: Dict, state: Dict):
                            state,
                            config.get('update_buffer_size'),
                            config.get('await_time_ms'),
-                           config.get('full_load_on_empty_state')
+                           config.get('full_load_on_empty_state'),
+                           config.get('remove_document_prefix')
                            )
     LOGGER.debug('Sync of log based streams done')
 

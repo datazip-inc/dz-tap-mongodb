@@ -30,7 +30,7 @@ def get_max_id_value(collection: Collection) -> Optional[str]:
     return None
 
 
-def sync_collection(collection: Collection, stream: Dict, state: Dict) -> None:
+def sync_collection(collection: Collection, stream: Dict, state: Dict,document_remove:bool = False) -> None:
     """
     Sync collection records incrementally
     Args:
@@ -109,7 +109,8 @@ def sync_collection(collection: Collection, stream: Dict, state: Dict) -> None:
                                                              row=row,
                                                              time_extracted=utils.now(),
                                                              time_deleted=None,
-                                                             version=stream_version))
+                                                             version=stream_version,
+                                                             document_remove=document_remove))
 
             state = singer.write_bookmark(state,
                                           stream['tap_stream_id'],
