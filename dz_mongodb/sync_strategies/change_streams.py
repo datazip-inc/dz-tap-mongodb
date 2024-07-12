@@ -1,5 +1,7 @@
 import copy
+from datetime import datetime
 import time
+from bson import ObjectId
 import singer
 import pymongo
 
@@ -77,6 +79,7 @@ def sync_database(database: Database,
                   update_buffer_size: int,
                   await_time_ms: int,
                   full_load_on_empty_state: bool,
+                  start_date: Optional[str],
                   document_remove: bool = False
                   ) -> None:
     """
@@ -111,9 +114,13 @@ def sync_database(database: Database,
         for tap_stream_id in full_load:
             table_name = streams_to_sync[tap_stream_id].get('table_name')
             collection = database[table_name]
-
+            filter = {}
+            if start_date:
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                filter = { "_id": { "$gt": ObjectId.from_datetime(start_datetime) }}
+                LOGGER.info('using filter for date[%s] to fetch data: %s',start_datetime, filter)
             # TODO: add batches
-            with collection.find(sort=[("_id", pymongo.ASCENDING)]) as cursor:
+            with collection.find(filter,sort=[("_id", pymongo.ASCENDING)]) as cursor:
                 for row in cursor:
                     rows_saved[tap_stream_id] += 1
                     singer.write_message(common.row_to_singer_record(stream=streams_to_sync[tap_stream_id],
