@@ -117,7 +117,7 @@ def sync_database(database: Database,
             filter = {}
             if start_date:
                 start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
-                filter = { "_id": { "$gt": ObjectId.from_datetime(start_datetime) }}
+                filter = { "_id": { "$gte": ObjectId.from_datetime(start_datetime) }}
                 LOGGER.info('using filter for date[%s] to fetch data: %s',start_datetime, filter)
             # TODO: add batches
             with collection.find(filter,sort=[("_id", pymongo.ASCENDING)]) as cursor:
