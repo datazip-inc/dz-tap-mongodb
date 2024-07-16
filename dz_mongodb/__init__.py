@@ -174,6 +174,7 @@ def sync_log_based_streams(client: MongoClient,
                            update_buffer_size: Optional[int],
                            await_time_ms: Optional[int],
                            full_load_on_empty_state: bool,
+                           start_date: Optional[str],
                            document_remove:bool  = False,
                            ):
     """
@@ -209,7 +210,7 @@ def sync_log_based_streams(client: MongoClient,
         update_buffer_size = update_buffer_size or change_streams.MIN_UPDATE_BUFFER_LENGTH
         await_time_ms = await_time_ms or change_streams.DEFAULT_AWAIT_TIME_MS
 
-        change_streams.sync_database(client[database_name], streams, state, update_buffer_size, await_time_ms, full_load_on_empty_state,document_remove)
+        change_streams.sync_database(client[database_name], streams, state, update_buffer_size, await_time_ms, full_load_on_empty_state,start_date,document_remove)
 
     state = singer.set_currently_syncing(state, None)
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
@@ -243,6 +244,7 @@ def do_sync(client: MongoClient, catalog: Dict, config: Dict, state: Dict):
                            config.get('update_buffer_size'),
                            config.get('await_time_ms'),
                            config.get('full_load_on_empty_state'),
+                           config.get('start_date'),
                            config.get('remove_document_prefix')
                            )
     LOGGER.debug('Sync of log based streams done')
