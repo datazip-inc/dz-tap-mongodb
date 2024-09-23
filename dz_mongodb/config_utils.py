@@ -45,8 +45,3 @@ def validate_config(config: Dict) -> None:
 
         if full_load_on_empty_state not in [True, False]:
             raise InvalidLogBasedFullLoadOnEmptyState(full_load_on_empty_state, 'expected string boolean.')
-        
-    if 'start_date' in config:
-        start_datetime = datetime.strptime(config['start_date'], "%Y-%m-%d")
-        if not isinstance(start_datetime, datetime):
-            raise ValueError('start_date must be a datetime object.')
