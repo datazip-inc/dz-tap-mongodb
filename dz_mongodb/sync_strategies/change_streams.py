@@ -78,7 +78,6 @@ def check_resume_token_existance(client: MongoClient, resume_token_ts: datetime)
     """
     function check if provided timestamp is present in oplog or not
     """
-    # no active transactions get current resume_token_ts
     oplogRS = client["local"]["oplog.rs"]
     oplog_obj = oplogRS.find_one(sort = [("$natural", pymongo.ASCENDING)])
     first_oplog_ts =  oplog_obj.get("ts")
@@ -162,8 +161,6 @@ def sync_database(client: MongoClient,
     if full_load_on_empty_state:
         # preserve resume token from oplog
         first_resume_token = get_current_resume_token(client, database)
-        LOGGER.info("add element here: ")
-        time.sleep(20)
         for tap_stream_id in full_load:
             table_name = streams_to_sync[tap_stream_id].get('table_name')
             collection = database[table_name]
