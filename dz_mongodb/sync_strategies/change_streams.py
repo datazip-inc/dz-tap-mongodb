@@ -187,7 +187,7 @@ def sync_database(client: MongoClient,
             start_at_op_time = first_resume_token
             LOGGER.info('Resume token after full load: [%s]',first_resume_token)
    
-    if not start_after or not start_at_op_time:
+    if not start_after and not start_at_op_time:
         LOGGER.info("Running change stream watch from current timestamp")
     # Init a cursor to listen for changes from the last saved resume token
     # if there are no changes after MAX_AWAIT_TIME_MS, then we'll exit
@@ -232,11 +232,14 @@ def sync_database(client: MongoClient,
                 singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
                 break
-
-            database_name = change["ns"]["db"]
-            # remove the prefix from the database name
-            database_name = database_name.split('_', 1)[-1]
-            tap_stream_id = f'{database_name}-{change["ns"]["coll"]}'
+            # can't use db name as sometime comes : 62a821b1fe15fd039ed2e450_test-users
+            # or sometime test-users
+            # database_name = change["ns"]["db"]
+            # database_name = database_name.split('_', 1)[-1]
+            if db_name not in change["ns"]["db"]:
+                continue
+            
+            tap_stream_id = f'{db_name}-{change["ns"]["coll"]}'
 
             operation = change['operationType']
 
