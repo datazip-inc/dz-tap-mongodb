@@ -161,6 +161,7 @@ def sync_database(client: MongoClient,
     if full_load_on_empty_state:
         # preserve resume token from oplog
         first_resume_token = None
+        # if start_after not present that means it is fist sync and with full load
         if not start_after:
             first_resume_token = get_current_resume_token(client, database)
         for tap_stream_id in full_load:
@@ -180,8 +181,7 @@ def sync_database(client: MongoClient,
                                                                     time_extracted=utils.now(),
                                                                     time_deleted=None, document_remove=document_remove))
                     
-        # if start_after not present that means it is fist sync and with full load
-        if not start_after:
+        if first_resume_token:
             if not check_resume_token_existance(client,first_resume_token.as_datetime()):
                 raise Exception("Oplog Overflow: Resume token not found from oplogs")
             start_at_op_time = first_resume_token
