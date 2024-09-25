@@ -160,7 +160,9 @@ def sync_database(client: MongoClient,
     # perform full load if no previous token exists
     if full_load_on_empty_state:
         # preserve resume token from oplog
-        first_resume_token = get_current_resume_token(client, database)
+        first_resume_token = None
+        if not start_after:
+            first_resume_token = get_current_resume_token(client, database)
         for tap_stream_id in full_load:
             table_name = streams_to_sync[tap_stream_id].get('table_name')
             collection = database[table_name]
