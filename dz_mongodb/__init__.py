@@ -44,10 +44,10 @@ def process_collection(database: Database, collection_name: str):
 
     if is_view:
         LOGGER.info("Skipping view '%s' in database '%s'", collection_name, database.name)
-        return None  # Skip views
+        return None
 
     LOGGER.info("Getting collection info for db '%s', collection '%s'", database.name, collection_name)
-    schema = produce_collection_schema(collection)  # Produce the schema
+    schema = produce_collection_schema(collection) 
     return schema
 
 
@@ -83,7 +83,7 @@ def do_discover(client: MongoClient, config: Dict):
             try:
                 result = future.result()
                 if result:
-                    streams.append(result)  # Store produced schema
+                    streams.append(result)
             except Exception as exc:
                 LOGGER.error("Error processing collection '%s': %s", collection_name, exc)
 
