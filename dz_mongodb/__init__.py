@@ -4,7 +4,7 @@ import json
 import sys
 from typing import List, Dict, Optional
 from urllib import parse
-
+import concurrent.futures
 import singer
 from pymongo import MongoClient
 from singer import metadata, metrics, utils
@@ -13,6 +13,8 @@ from dz_mongodb.sync_strategies import change_streams
 from dz_mongodb.sync_strategies import common
 from dz_mongodb.sync_strategies import full_table
 from dz_mongodb.sync_strategies import incremental
+from pymongo.database import Database
+
 from dz_mongodb.config_utils import validate_config
 from dz_mongodb.db_utils import get_databases, produce_collection_schema
 from dz_mongodb.errors import InvalidReplicationMethodException, NoReadPrivilegeException
@@ -36,6 +38,19 @@ INCREMENTAL_METHOD = 'INCREMENTAL'
 FULL_TABLE_METHOD = 'FULL_TABLE'
 
 
+def process_collection(database: Database, collection_name: str):
+    collection = database[collection_name]
+    is_view = collection.options().get('viewOn') is not None
+
+    if is_view:
+        LOGGER.info("Skipping view '%s' in database '%s'", collection_name, database.name)
+        return None
+
+    LOGGER.info("Getting collection info for db '%s', collection '%s'", database.name, collection_name)
+    schema = produce_collection_schema(collection) 
+    return schema
+
+
 def do_discover(client: MongoClient, config: Dict):
     """
     Run discovery mode where the mongodb cluster is scanned and
@@ -55,17 +70,34 @@ def do_discover(client: MongoClient, config: Dict):
 
     collection_names = database.list_collection_names()
 
-    for collection_name in [c for c in collection_names if not c.startswith("system.")]:
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        # List of futures for each collection that is not a system collection
+        futures = {
+            executor.submit(process_collection, database, collection_name): collection_name
+            for collection_name in collection_names
+            if not collection_name.startswith("system.")
+        }
+        
+        for future in concurrent.futures.as_completed(futures):
+            collection_name = futures[future]
+            try:
+                result = future.result()
+                if result:
+                    streams.append(result)
+            except Exception as exc:
+                LOGGER.error("Error processing collection '%s': %s", collection_name, exc)
 
-        collection = database[collection_name]
-        is_view = collection.options().get('viewOn') is not None
+    # for collection_name in [c for c in collection_names if not c.startswith("system.")]:
 
-        # Add support for views if needed here
-        if is_view:
-            continue
+    #     collection = database[collection_name]
+    #     is_view = collection.options().get('viewOn') is not None
 
-        LOGGER.info("Getting collection info for db '%s', collection '%s'", database.name, collection_name)
-        streams.append(produce_collection_schema(collection))
+    #     # Add support for views if needed here
+    #     if is_view:
+    #         continue
+
+    #     LOGGER.info("Getting collection info for db '%s', collection '%s'", database.name, collection_name)
+    #     streams.append(produce_collection_schema(collection))
 
     json.dump({'streams': streams}, sys.stdout, indent=2)
 

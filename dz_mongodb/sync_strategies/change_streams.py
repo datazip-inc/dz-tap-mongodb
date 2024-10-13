@@ -80,7 +80,7 @@ def check_resume_token_existance(client: MongoClient, resume_token_ts: datetime)
     """
     oplogRS = client["local"]["oplog.rs"]
     oplog_obj = oplogRS.find_one(sort = [("$natural", pymongo.ASCENDING)])
-    first_oplog_ts =  oplog_obj.get("ts")
+    first_oplog_ts =  oplog_obj.get("ts") if oplog_obj else None
     if not first_oplog_ts:
         raise Exception("unable to read first oplog for resume token verification")
     if resume_token_ts < first_oplog_ts.as_datetime():
@@ -105,6 +105,8 @@ def get_current_resume_token(client: MongoClient, database: Database) -> Timesta
             # no active transactions get current timestamp
             oplogRS = client["local"]["oplog.rs"]
             oplog_obj = oplogRS.find_one(sort = [("$natural", pymongo.DESCENDING)])
+            if not oplog_obj:
+                return None
             return oplog_obj.get("ts")
         
         raw_ts = result.get("startOpTime", {}).get("ts")
