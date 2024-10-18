@@ -92,7 +92,7 @@ def get_current_resume_token(client: MongoClient, database: Database) -> Timesta
     returns current timestamp resume token or oldest resume token of active transactions
     """
     coll = client["config"].get_collection(
-        "transactions", 
+        "transactions",
         read_concern=ReadConcern("local")
     )
 
@@ -108,11 +108,11 @@ def get_current_resume_token(client: MongoClient, database: Database) -> Timesta
             if not oplog_obj:
                 return None
             return oplog_obj.get("ts")
-        
+
         raw_ts = result.get("startOpTime", {}).get("ts")
         if not raw_ts:
             raise Exception("config.transactions row had no startOpTime.ts field")
-        
+
         if isinstance(raw_ts, Timestamp):
             return raw_ts
         else:
@@ -175,20 +175,20 @@ def sync_database(client: MongoClient,
                 filter = { "_id": { "$gte": ObjectId.from_datetime(start_datetime) }}
                 LOGGER.info('using filter for date[%s] to fetch data: %s',start_datetime, filter)
             # TODO: add batches
-            with collection.find(filter,sort=[("_id", pymongo.ASCENDING)]) as cursor:
+            with collection.find(filter,sort=[("_id", pymongo.ASCENDING)], no_cursor_timeout=True) as cursor:
                 for row in cursor:
                     rows_saved[tap_stream_id] += 1
                     singer.write_message(common.row_to_singer_record(stream=streams_to_sync[tap_stream_id],
                                                                     row=row,
                                                                     time_extracted=utils.now(),
                                                                     time_deleted=None, document_remove=document_remove))
-                    
+
         if first_resume_token:
             if not check_resume_token_existance(client,first_resume_token.as_datetime()):
                 raise Exception("Oplog Overflow: Resume token not found from oplogs")
             start_at_op_time = first_resume_token
             LOGGER.info('Resume token after full load: [%s]',first_resume_token)
-   
+
     if not start_after and not start_at_op_time:
         LOGGER.info("Running change stream watch from current timestamp")
     # Init a cursor to listen for changes from the last saved resume token
@@ -240,7 +240,7 @@ def sync_database(client: MongoClient,
             # database_name = database_name.split('_', 1)[-1]
             if db_name not in change["ns"]["db"]:
                 continue
-            
+
             tap_stream_id = f'{db_name}-{change["ns"]["coll"]}'
 
             operation = change['operationType']
