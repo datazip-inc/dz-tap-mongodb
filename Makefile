@@ -34,3 +34,6 @@ test:
 
 test_cov:
 	pytest --cov=dz_mongodb tests -v --cov-fail-under=42
+
+local_build:
+	python setup.py sdist
