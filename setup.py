@@ -5,7 +5,7 @@ with open('README.md', 'r') as fh:
     long_desc = fh.read()
 
 setup(name='dz-mongodb',
-      version='1.4.7',
+      version='1.4.8',
       description='Singer.io tap for extracting data from MongoDB - Datazip compatible',
       long_description=long_desc,
       long_description_content_type='text/markdown',
