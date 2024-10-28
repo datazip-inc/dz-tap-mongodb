@@ -87,40 +87,27 @@ def check_resume_token_existance(client: MongoClient, resume_token_ts: datetime)
         return False
     return True
 
-def get_current_resume_token(client: MongoClient, database: Database) -> Timestamp:
+def get_current_resume_token(database: Database, streams_to_sync: Dict[str, Dict]) -> Optional[str]:
     """
     returns current timestamp resume token or oldest resume token of active transactions
     """
-    coll = client["config"].get_collection(
-        "transactions",
-        read_concern=ReadConcern("local")
-    )
-
-    filter = {"state": {"$in": ["prepared", "inProgress"]}}
-    opts = {"sort": [("startOpTime", 1)]} # first transaction in progress or prepared
-
-    try:
-        result = coll.find_one(filter, **opts)
-        if not result:
-            # no active transactions get current timestamp
-            oplogRS = client["local"]["oplog.rs"]
-            oplog_obj = oplogRS.find_one(sort = [("$natural", pymongo.DESCENDING)])
-            if not oplog_obj:
-                return None
-            return oplog_obj.get("ts")
-
-        raw_ts = result.get("startOpTime", {}).get("ts")
-        if not raw_ts:
-            raise Exception("config.transactions row had no startOpTime.ts field")
-
-        if isinstance(raw_ts, Timestamp):
-            return raw_ts
-        else:
-            raise Exception("config.transactions startOpTime.ts was not a BSON timestamp")
-
-    except pymongo.errors.PyMongoError as e:
-        raise Exception(f"config.transactions.findOne error: {e}")
-
+    resume_token = None
+    with database.watch(
+            [{'$match': {
+                '$or': [
+                    {'operationType': 'insert'}, {'operationType': 'update'}, {'operationType': 'delete'}
+                ],
+                '$and': [
+                    {'ns.coll': {'$in': [val['table_name'] for val in streams_to_sync.values()]}}
+                ]
+            }}]
+    ) as temp_cursor:
+        # Fetch the first change event to get the resume token
+        resume_token = {
+            '_data': temp_cursor.resume_token['_data']
+        }
+        temp_cursor.close()
+    return resume_token
 
 def sync_database(client: MongoClient,
                   db_name: str,
@@ -157,15 +144,13 @@ def sync_database(client: MongoClient,
 
 
     stream_ids = set(streams_to_sync.keys())
-    start_at_op_time = None
     start_after = get_token_from_state(stream_ids, state)
     # perform full load if no previous token exists
     if full_load_on_empty_state:
-        # preserve resume token from oplog
-        first_resume_token = None
         # if start_after not present that means it is fist sync and with full load
         if not start_after:
-            first_resume_token = get_current_resume_token(client, database)
+            # preserve resume token from oplog
+            start_after = get_current_resume_token(database, streams_to_sync)
         for tap_stream_id in full_load:
             table_name = streams_to_sync[tap_stream_id].get('table_name')
             collection = database[table_name]
@@ -174,8 +159,10 @@ def sync_database(client: MongoClient,
                 start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
                 filter = { "_id": { "$gte": ObjectId.from_datetime(start_datetime) }}
                 LOGGER.info('using filter for date[%s] to fetch data: %s',start_datetime, filter)
+
             # TODO: add batches
-            with collection.find(filter,sort=[("_id", pymongo.ASCENDING)], no_cursor_timeout=True) as cursor:
+            # We can't use no timeout for some atlas tiers, also no_cursor_timeout only works for 30 mins.
+            with collection.find(filter,sort=[("_id", pymongo.ASCENDING)]) as cursor:
                 for row in cursor:
                     rows_saved[tap_stream_id] += 1
                     singer.write_message(common.row_to_singer_record(stream=streams_to_sync[tap_stream_id],
@@ -183,15 +170,7 @@ def sync_database(client: MongoClient,
                                                                     time_extracted=utils.now(),
                                                                     time_deleted=None, document_remove=document_remove))
 
-        if first_resume_token:
-            if not check_resume_token_existance(client,first_resume_token.as_datetime()):
-                raise Exception("Oplog Overflow: Resume token not found from oplogs")
-            start_at_op_time = first_resume_token
-            LOGGER.info('Resume token after full load: [%s]',first_resume_token)
-
-    if not start_after and not start_at_op_time:
-        LOGGER.info("Running change stream watch from current timestamp")
-    # Init a cursor to listen for changes from the last saved resume token
+    LOGGER.info('starting change streams with resume token[%s]',start_after)
     # if there are no changes after MAX_AWAIT_TIME_MS, then we'll exit
     with database.watch(
             [{'$match': {
@@ -204,8 +183,7 @@ def sync_database(client: MongoClient,
                 ]
             }}],
             max_await_time_ms=await_time_ms,
-            start_after=start_after,
-            start_at_operation_time= start_at_op_time,
+            start_after=start_after
     ) as cursor:
         while cursor.alive:
 
