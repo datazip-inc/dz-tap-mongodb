@@ -32,7 +32,7 @@ setup(name='dz-mongodb',
           ],
           'test': [
               'pytest==6.2.5',
-              'pytest-cov==3.0.0'
+              'pytest-cov==4.1.0'
           ]
       },
       entry_points='''
