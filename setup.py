@@ -27,7 +27,7 @@ setup(name='dz-mongodb',
       ],
       extras_require={
           'dev': [
-              'pylint==2.12',
+              'pylint==3.0.2',
               'ipdb==0.13.*'
           ],
           'test': [
