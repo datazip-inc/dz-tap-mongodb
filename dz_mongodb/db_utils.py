@@ -178,23 +178,6 @@ def produce_collection_schema(collection: Collection) -> Dict:
     mdata = metadata.write(mdata, (), 'row-count', collection.estimated_document_count())
     mdata = metadata.write(mdata, (), 'is-view', is_view)
 
-    # write valid-replication-key metadata by finding fields that have indexes on them.
-    # cannot get indexes for views -- NB: This means no key-based incremental for views?
-    if not is_view:
-        valid_replication_keys = []
-        coll_indexes = collection.index_information()
-        # index_information() returns a map of index_name -> index_information
-        for _, index_info in coll_indexes.items():
-            # we don't support compound indexes
-            if len(index_info.get('key')) == 1:
-                index_field_info = index_info.get('key')[0]
-                # index_field_info is a tuple of (field_name, sort_direction)
-                if index_field_info:
-                    valid_replication_keys.append(index_field_info[0])
-
-        if valid_replication_keys:
-            mdata = metadata.write(mdata, (), 'valid-replication-keys', valid_replication_keys)
-
     db_schema = {
         'table_name': collection_name,
         'stream': collection_name,
@@ -227,4 +210,9 @@ def produce_collection_schema(collection: Collection) -> Dict:
 
             db_schema['schema']['properties'][key] = {"type": val_type}
 
+    # exposing all fields to be incremental
+    valid_replication_keys = list(db_schema['schema']['properties'].keys())
+    mdata = metadata.write(mdata, (), 'valid-replication-keys', valid_replication_keys)
+    db_schema['metadata'] = metadata.to_list(mdata)
+    
     return db_schema
