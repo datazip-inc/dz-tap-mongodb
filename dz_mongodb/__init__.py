@@ -80,12 +80,9 @@ def do_discover(client: MongoClient, config: Dict):
         
         for future in concurrent.futures.as_completed(futures):
             collection_name = futures[future]
-            try:
-                result = future.result()
-                if result:
-                    streams.append(result)
-            except Exception as exc:
-                LOGGER.error("Error processing collection '%s': %s", collection_name, exc)
+            result = future.result()
+            if result:
+                streams.append(result)
 
     # for collection_name in [c for c in collection_names if not c.startswith("system.")]:
 
